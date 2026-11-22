@@ -1,0 +1,3 @@
+node_modules/
+*.rigup-*.tmp
+.DS_Store

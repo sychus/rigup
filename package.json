@@ -1,0 +1,38 @@
+{
+  "name": "rigup",
+  "version": "0.1.0",
+  "description": "Set up Claude Code with your skills, agents and commands from any marketplace repo or local folder, and keep every machine the same.",
+  "type": "module",
+  "bin": {
+    "rigup": "./rigup.mjs"
+  },
+  "files": [
+    "rigup.mjs",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "skills",
+    "plugins",
+    "marketplace",
+    "cli",
+    "setup",
+    "doctor"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sychus/rigup.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sychus/rigup/issues"
+  },
+  "homepage": "https://github.com/sychus/rigup#readme",
+  "license": "GPL-3.0-only"
+}
