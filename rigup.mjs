@@ -8,6 +8,7 @@ import { realContext } from './src/context.mjs';
 import { doctor, exitCode, formatReport } from './src/doctor.mjs';
 import { runAdd, runRemove, runSources } from './src/sources-command.mjs';
 import { runSetup } from './src/setup-command.mjs';
+import { runList, runSearch } from './src/catalog-command.mjs';
 
 const HELP = `rigup · set up Claude Code with your skills, agents and commands
 
@@ -21,13 +22,16 @@ Usage:
                         Apply the config: register sources, link local folders, turn on
                         auto-update, install missing plugins (safe to repeat)
   rigup doctor [--json] Check this machine against the config (read-only)
+  rigup list [--json]   Every skill, agent and command of your sources, with what it does
+  rigup search <words> [--all] [--json]
+                        Find skills, agents and commands by topic, and how to use them
   rigup --version       Print the version
   rigup --help          Show this help
 
 Config: ~/.config/rigup/config.json (XDG_CONFIG_HOME respected; RIGUP_CONFIG overrides)`;
 
 // Commands on the roadmap: say so instead of "unknown command".
-const PLANNED = ['update', 'changes', 'list', 'search'];
+const PLANNED = ['update', 'changes'];
 
 function version() {
   return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
@@ -54,6 +58,8 @@ async function main(argv) {
   if (command === 'remove') return runRemove(realContext(), rest);
   if (command === 'sources') return runSources(realContext(), rest, { color });
   if (command === 'setup') return runSetup(realContext(), { dryRun: rest.includes('--dry-run'), color });
+  if (command === 'list') return runList(realContext(), rest, { color });
+  if (command === 'search') return runSearch(realContext(), rest, { color });
   if (command === 'doctor') {
     const report = doctor(realContext());
     if (rest.includes('--json')) console.log(JSON.stringify(report, null, 2));

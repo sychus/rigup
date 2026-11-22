@@ -3,8 +3,8 @@
 Set up Claude Code with your skills, agents and commands, from any marketplace repo or local
 folder, and keep every machine the same.
 
-> Status: early. `add`, `remove`, `sources`, `doctor` and `setup` work; `update`, `changes`,
-> `list` and `search` are next (see [Roadmap](#roadmap)).
+> Status: early. `add`, `remove`, `sources`, `doctor`, `setup`, `list` and `search` work;
+> `update` and `changes` are next (see [Roadmap](#roadmap)).
 
 ## Why
 
@@ -39,6 +39,8 @@ rigup add https://gitlab.com/acme/skills.git     # any git host
 rigup add ~/work/my-skills                       # a local folder
 rigup setup                                      # apply it (safe to repeat; --dry-run to preview)
 rigup doctor                                     # what is missing, and how to fix it
+rigup list                                       # every skill, agent and command you have
+rigup search pull request                        # find one by topic, and how to use it
 ```
 
 ## What `rigup setup` does
@@ -59,6 +61,19 @@ step that fails (run it again after fixing it; it picks up where it left off):
    plugin updates off.
 6. Installs, at user scope, every wanted plugin this machine does not have.
 7. Runs `doctor` again and lists what is left.
+
+## What `rigup list` and `rigup search` do
+
+They answer "what exists?" across all your sources, for the plugins you picked. Repos and local
+marketplaces are read from the marketplace folder Claude Code keeps, local folders straight from
+disk. A plugin whose catalog entry points at another repo (`git-subdir`, `url`) is read from its
+installed copy; until it is installed, `list` says so. Plugins not installed on this machine are
+marked.
+
+`rigup search` needs every word to appear in the name, the description or the body, ranks name
+matches above description matches above body matches, breaks ties by how often the topic is
+mentioned, and shows each match with how to use it (`/plugin:name`). Top 15; `--all` for every
+match. Both take `--json`.
 
 ## Sources
 
@@ -122,7 +137,6 @@ never needs a change in rigup.
 
 * `rigup update`: rigup itself, every source and every plugin, then what changed.
 * `rigup changes`: new, updated, renamed and removed skills, agents and commands in a window.
-* `rigup list` / `rigup search`: what exists across your sources, and how to use it.
 
 ## Development
 
