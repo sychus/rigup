@@ -4,7 +4,7 @@
   "description": "Set up Claude Code with your skills, agents and commands from any marketplace repo or local folder, and keep every machine the same.",
   "type": "module",
   "bin": {
-    "rigup": "./rigup.mjs"
+    "rigup": "rigup.mjs"
   },
   "files": [
     "rigup.mjs",
