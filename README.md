@@ -3,8 +3,7 @@
 Set up Claude Code with your skills, agents and commands, from any marketplace repo or local
 folder, and keep every machine the same.
 
-> Status: early. `add`, `remove`, `sources`, `doctor`, `setup`, `list` and `search` work;
-> `update` and `changes` are next (see [Roadmap](#roadmap)).
+> Status: early. Everything but `update` works (see [Roadmap](#roadmap)).
 
 ## Why
 
@@ -41,6 +40,7 @@ rigup setup                                      # apply it (safe to repeat; --d
 rigup doctor                                     # what is missing, and how to fix it
 rigup list                                       # every skill, agent and command you have
 rigup search pull request                        # find one by topic, and how to use it
+rigup changes --since 2w                         # what is new, updated, renamed or removed
 ```
 
 ## What `rigup setup` does
@@ -74,6 +74,25 @@ marked.
 matches above description matches above body matches, breaks ties by how often the topic is
 mentioned, and shows each match with how to use it (`/plugin:name`). Top 15; `--all` for every
 match. Both take `--json`.
+
+## What `rigup changes` does
+
+Lists what changed in your plugins in a window, grouped by source and plugin: **new** (the
+skill's `SKILL.md`, or the agent or command file, was added), **renamed** (git matched the move),
+**updated** (anything inside it changed) and **removed**, each with the first sentence of its
+`description`.
+
+```bash
+rigup changes                                  # last 7 days
+rigup changes --since 2w
+rigup changes --since 2026-11-01 --until 2026-11-15
+rigup changes --since <commit> --json          # e.g. to generate a weekly digest
+```
+
+Claude Code's marketplace clones are shallow, so they have no history. For repo sources rigup
+keeps its own bare, blobless clone under `~/.cache/rigup/history/` (`XDG_CACHE_HOME`
+respected). A local folder inside a git repo uses that repo's history, read-only: rigup never
+fetches, resets or checks out there. A local folder outside git has no history and says so.
 
 ## Sources
 
@@ -136,7 +155,6 @@ never needs a change in rigup.
 ## Roadmap
 
 * `rigup update`: rigup itself, every source and every plugin, then what changed.
-* `rigup changes`: new, updated, renamed and removed skills, agents and commands in a window.
 
 ## Development
 
