@@ -3,7 +3,7 @@
 Set up Claude Code with your skills, agents and commands, from any marketplace repo or local
 folder, and keep every machine the same.
 
-> Status: early. Everything but `update` works (see [Roadmap](#roadmap)).
+> Status: early (0.2). Feedback and issues welcome.
 
 ## Why
 
@@ -41,6 +41,7 @@ rigup doctor                                     # what is missing, and how to f
 rigup list                                       # every skill, agent and command you have
 rigup search pull request                        # find one by topic, and how to use it
 rigup changes --since 2w                         # what is new, updated, renamed or removed
+rigup update                                     # rigup, every source and every plugin
 ```
 
 ## What `rigup setup` does
@@ -61,6 +62,19 @@ step that fails (run it again after fixing it; it picks up where it left off):
    plugin updates off.
 6. Installs, at user scope, every wanted plugin this machine does not have.
 7. Runs `doctor` again and lists what is left.
+
+## What `rigup update` does
+
+One command updates everything:
+
+1. **rigup itself**: from npm (`pnpm add -g rigup@latest` when a newer version exists), or, for a
+   git install, from the same repo and branch when its commit moved. Run from a checkout, it
+   skips this step.
+2. **Every source**: refreshes each registered marketplace, and rebuilds `rigup-local` from your
+   local folders.
+3. **Every plugin** of your sources, one by one (Claude Code has no bulk update). A local plugin
+   is refreshed only when its folder changed since the installed copy.
+4. **What changed** in the repos that moved, from the same engine as `rigup changes`.
 
 ## What `rigup list` and `rigup search` do
 
@@ -151,10 +165,6 @@ never needs a change in rigup.
 | `connectors[]` | MCP servers, by the name `claude mcp list` shows. Found under one of `alternatives` is a warning: tool names (`mcp__<name>__*`) will not match what the skills call. |
 | `optional` | `true`: only some skills need it; missing is shown as information, never as an error. |
 | `usedBy` | The skills, agents or commands that need an optional item. |
-
-## Roadmap
-
-* `rigup update`: rigup itself, every source and every plugin, then what changed.
 
 ## Development
 

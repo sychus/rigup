@@ -10,6 +10,7 @@ import { runAdd, runRemove, runSources } from './src/sources-command.mjs';
 import { runSetup } from './src/setup-command.mjs';
 import { runList, runSearch } from './src/catalog-command.mjs';
 import { runChanges } from './src/changes-command.mjs';
+import { findInstall, runUpdate } from './src/update.mjs';
 
 const HELP = `rigup · set up Claude Code with your skills, agents and commands
 
@@ -22,19 +23,17 @@ Usage:
   rigup setup [--dry-run]
                         Apply the config: register sources, link local folders, turn on
                         auto-update, install missing plugins (safe to repeat)
+  rigup update          Update rigup, every source and every plugin, then show what changed
   rigup doctor [--json] Check this machine against the config (read-only)
   rigup changes [--since 7d|2w|YYYY-MM-DD|<commit>] [--until YYYY-MM-DD] [--json]
                         New, updated, renamed and removed skills, agents and commands
   rigup list [--json]   Every skill, agent and command of your sources, with what it does
   rigup search <words> [--all] [--json]
                         Find skills, agents and commands by topic, and how to use them
-  rigup --version       Print the version
+  rigup --version       Print the version (and the commit, for a git install)
   rigup --help          Show this help
 
 Config: ~/.config/rigup/config.json (XDG_CONFIG_HOME respected; RIGUP_CONFIG overrides)`;
-
-// Commands on the roadmap: say so instead of "unknown command".
-const PLANNED = ['update'];
 
 function version() {
   return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
@@ -54,13 +53,15 @@ async function main(argv) {
     return 0;
   }
   if (command === '--version' || command === '-v') {
-    console.log(version());
+    const install = findInstall(realContext());
+    console.log(install && install.commit ? `${version()} (${install.commit.slice(0, 7)})` : version());
     return 0;
   }
   if (command === 'add') return runAdd(realContext(), rest);
   if (command === 'remove') return runRemove(realContext(), rest);
   if (command === 'sources') return runSources(realContext(), rest, { color });
   if (command === 'setup') return runSetup(realContext(), { dryRun: rest.includes('--dry-run'), color });
+  if (command === 'update') return runUpdate(realContext(), { color });
   if (command === 'changes') return runChanges(realContext(), rest, { color });
   if (command === 'list') return runList(realContext(), rest, { color });
   if (command === 'search') return runSearch(realContext(), rest, { color });
@@ -69,10 +70,6 @@ async function main(argv) {
     if (rest.includes('--json')) console.log(JSON.stringify(report, null, 2));
     else console.log(formatReport(report, { color }));
     return exitCode(report);
-  }
-  if (PLANNED.includes(command)) {
-    console.error(`rigup: "${command}" is on the roadmap but not built yet.\n\n${HELP}`);
-    return 2;
   }
   console.error(`rigup: unknown command "${command}"\n\n${HELP}`);
   return 2;
