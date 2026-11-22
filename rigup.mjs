@@ -7,6 +7,7 @@ import { MIN_NODE_MAJOR } from './src/constants.mjs';
 import { realContext } from './src/context.mjs';
 import { doctor, exitCode, formatReport } from './src/doctor.mjs';
 import { runAdd, runRemove, runSources } from './src/sources-command.mjs';
+import { runSetup } from './src/setup-command.mjs';
 
 const HELP = `rigup · set up Claude Code with your skills, agents and commands
 
@@ -16,6 +17,9 @@ Usage:
                         (a marketplace, a plugin folder, or a folder of <name>/SKILL.md)
   rigup remove <source> Remove a source from the config (installed plugins stay)
   rigup sources         List the configured sources
+  rigup setup [--dry-run]
+                        Apply the config: register sources, link local folders, turn on
+                        auto-update, install missing plugins (safe to repeat)
   rigup doctor [--json] Check this machine against the config (read-only)
   rigup --version       Print the version
   rigup --help          Show this help
@@ -23,7 +27,7 @@ Usage:
 Config: ~/.config/rigup/config.json (XDG_CONFIG_HOME respected; RIGUP_CONFIG overrides)`;
 
 // Commands on the roadmap: say so instead of "unknown command".
-const PLANNED = ['setup', 'update', 'changes', 'list', 'search'];
+const PLANNED = ['update', 'changes', 'list', 'search'];
 
 function version() {
   return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
@@ -49,6 +53,7 @@ async function main(argv) {
   if (command === 'add') return runAdd(realContext(), rest);
   if (command === 'remove') return runRemove(realContext(), rest);
   if (command === 'sources') return runSources(realContext(), rest, { color });
+  if (command === 'setup') return runSetup(realContext(), { dryRun: rest.includes('--dry-run'), color });
   if (command === 'doctor') {
     const report = doctor(realContext());
     if (rest.includes('--json')) console.log(JSON.stringify(report, null, 2));

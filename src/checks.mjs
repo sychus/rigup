@@ -128,6 +128,12 @@ export function checkSource(s, facts) {
   }
 
   if (s.kind === 'plugin' || s.kind === 'flat') {
+    const lm = facts.localMarketplace;
+    const from = lm && lm.registered && (lm.registered.path || lm.registered.installLocation);
+    if (from && lm.dir && from !== lm.dir) {
+      results.push(fail(`${LOCAL_MARKETPLACE} is registered from ${from}, not rigup's ${lm.dir}`, `claude plugin marketplace remove ${LOCAL_MARKETPLACE}, then rigup setup`));
+      return { title, results };
+    }
     if (!s.marketplace || !s.inLocalMarketplace) {
       results.push(fail(`not linked into the ${LOCAL_MARKETPLACE} marketplace`, 'rigup setup', 'setup'));
       return { title, results };

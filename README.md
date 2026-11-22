@@ -3,7 +3,7 @@
 Set up Claude Code with your skills, agents and commands, from any marketplace repo or local
 folder, and keep every machine the same.
 
-> Status: early. `add`, `remove`, `sources` and `doctor` work; `setup`, `update`, `changes`,
+> Status: early. `add`, `remove`, `sources`, `doctor` and `setup` work; `update`, `changes`,
 > `list` and `search` are next (see [Roadmap](#roadmap)).
 
 ## Why
@@ -37,8 +37,28 @@ rigup add acme/claude-skills                     # a GitHub repo that is a marke
 rigup add acme/big-catalog --plugins review,docs # only some plugins of a big catalog
 rigup add https://gitlab.com/acme/skills.git     # any git host
 rigup add ~/work/my-skills                       # a local folder
-rigup doctor
+rigup setup                                      # apply it (safe to repeat; --dry-run to preview)
+rigup doctor                                     # what is missing, and how to fix it
 ```
+
+## What `rigup setup` does
+
+It plans from the same facts `doctor` reads, applies the plan in order and stops at the first
+step that fails (run it again after fixing it; it picks up where it left off):
+
+1. Stops early, with the fix, if Node or `claude` is too old, the config has errors or there are
+   no sources.
+2. Skips, with a hint, sources it cannot use (a folder that does not exist, a repo it cannot
+   reach without a prompt), and sets up the rest. For GitHub, when `gh` is signed in, it runs
+   `gh auth setup-git` instead of skipping.
+3. Registers each repo or local marketplace that is not registered yet, at user scope.
+4. Rebuilds `rigup-local` for local plugin and skills folders (a symlink to each plugin folder, a
+   copy of each skills folder) and registers or refreshes it. Your folders are never modified.
+5. Turns on `autoUpdate` for the repos in your user `settings.json` (merged; an invalid file is
+   never overwritten), plus `FORCE_AUTOUPDATE_PLUGINS=1` when a variable in your shell turns
+   plugin updates off.
+6. Installs, at user scope, every wanted plugin this machine does not have.
+7. Runs `doctor` again and lists what is left.
 
 ## Sources
 
@@ -100,7 +120,6 @@ never needs a change in rigup.
 
 ## Roadmap
 
-* `rigup setup`: register sources, generate `rigup-local`, turn on auto-update, install plugins.
 * `rigup update`: rigup itself, every source and every plugin, then what changed.
 * `rigup changes`: new, updated, renamed and removed skills, agents and commands in a window.
 * `rigup list` / `rigup search`: what exists across your sources, and how to use it.

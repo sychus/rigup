@@ -58,6 +58,7 @@ export const LOCAL_CATALOG = {
 export function fakeContext({ overrides = {}, files = {}, mtimes = {}, env = {}, nodeVersion = '24.11.0', config } = {}) {
   const calls = [];
   const writes = [];
+  const ops = [];
   const defaults = {
     'claude --version': ok('2.1.328 (Claude Code)\n'),
     'claude plugin marketplace list --json': ok(JSON.stringify(MARKETPLACES, null, 2)),
@@ -79,7 +80,7 @@ export function fakeContext({ overrides = {}, files = {}, mtimes = {}, env = {},
   const isDir = p => Object.keys(table).some(f => f.startsWith(`${p}/`));
 
   return {
-    calls, writes, env, nodeVersion,
+    calls, writes, ops, env, nodeVersion,
     home: HOME, cwd: `${HOME}/work`,
     configDir: `${HOME}/.claude`, configFile: CONFIG_FILE, dataDir: DATA_DIR, cacheDir: `${HOME}/.cache/rigup`,
     appDir: '/opt/rigup',
@@ -105,5 +106,9 @@ export function fakeContext({ overrides = {}, files = {}, mtimes = {}, env = {},
       return [...new Set(Object.keys(table).filter(f => f.startsWith(`${dir}/`)).map(f => f.slice(dir.length + 1).split('/')[0]))].sort();
     },
     newestMtime: dir => (dir in mtimes ? mtimes[dir] : Date.parse('2026-11-05T00:00:00Z')),
+    mkdir: dir => ops.push(`mkdir ${dir}`),
+    remove: p => ops.push(`remove ${p}`),
+    symlink: (target, link) => ops.push(`symlink ${link} -> ${target}`),
+    copyDir: (from, to) => ops.push(`copy ${from} -> ${to}`),
   };
 }
