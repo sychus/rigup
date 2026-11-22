@@ -8,7 +8,11 @@ import { compareVersions, parseCliJson, parseJson, parseLsRemote, shortSha } fro
 import { formatChanges } from './changes.mjs';
 import { computeChanges, openHistory } from './history.mjs';
 
-const PACKAGE = 'rigup';
+// The npm package name (scoped: npm rejected plain "rigup" as too close to "rig-up").
+// The command stays `rigup`. Everything below derives from this one constant.
+export const PACKAGE = '@sychusdev/rigup';
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const LOCK_RE = new RegExp(`(?:^|\\n)\\s*'?${escapeRe(PACKAGE)}@[^\\n]*\\n\\s*resolution: \\{commit: ([0-9a-f]{40})`);
 
 /** True for a pnpm git spec ("github:o/r", "git+https://…", "o/r#ref"); false for a registry range. */
 export function isGitSpec(spec) {
@@ -26,7 +30,7 @@ export function gitSpecTarget(spec) {
 
 /** Commit rigup was installed at, from the pnpm lockfile next to the global package.json. */
 export function lockCommit(lockText) {
-  const m = /(?:^|\n)\s*'?rigup@[^\n]*\n\s*resolution: \{commit: ([0-9a-f]{40})/.exec(lockText || '');
+  const m = LOCK_RE.exec(lockText || '');
   return m ? m[1] : null;
 }
 
@@ -73,10 +77,10 @@ export function updateSelf(ctx) {
   const current = ownVersion(ctx);
   const view = ctx.run('npm', ['view', PACKAGE, 'version'], { timeout: 30000 });
   const latest = view.status === 0 ? view.stdout.trim() : null;
-  if (!latest) return { status: 'info', text: 'could not check the latest rigup version (npm view rigup version)', changed: false };
+  if (!latest) return { status: 'info', text: `could not check the latest rigup version (npm view ${PACKAGE} version)`, changed: false };
   if (current && compareVersions(latest, current) <= 0) return { status: 'ok', text: `rigup ${current} is the latest`, changed: false };
   const res = ctx.run('pnpm', ['add', '-g', `${PACKAGE}@latest`], { timeout: 300000 });
-  if (res.status !== 0) return { status: 'fail', text: 'could not update rigup', detail: 'pnpm add -g rigup@latest', changed: false };
+  if (res.status !== 0) return { status: 'fail', text: 'could not update rigup', detail: `pnpm add -g ${PACKAGE}@latest`, changed: false };
   return { status: 'ok', text: `rigup ${current || '?'} → ${latest}`, changed: true };
 }
 

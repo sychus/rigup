@@ -8,15 +8,15 @@ import { findInstall, gitSpecTarget, isGitSpec, lockCommit, runUpdate, updateSel
 import { ACME_LOCATION, CLONE_HEAD, fakeContext, failed, MY_SKILLS, ok, REMOTE_HEAD } from './helpers.mjs';
 
 const GLOBAL = '/home/dev/.local/share/pnpm/global/v11/abc';
-const APP = `${GLOBAL}/node_modules/.pnpm/rigup@0.2.0/node_modules/rigup`;
+const APP = `${GLOBAL}/node_modules/.pnpm/@sychusdev+rigup@0.2.0/node_modules/@sychusdev/rigup`;
 const SHA = 'a'.repeat(40);
-const LOCK = `packages:\n\n  rigup@git+https://github.com/sychus/rigup.git#${SHA}:\n    resolution: {commit: ${SHA}, repo: https://github.com/sychus/rigup.git, type: git}\n    version: 0.2.0\n`;
+const LOCK = `packages:\n\n  '@sychusdev/rigup@git+https://github.com/sychus/rigup.git#${SHA}':\n    resolution: {commit: ${SHA}, repo: https://github.com/sychus/rigup.git, type: git}\n    version: 0.2.0\n`;
 
 const installed = (spec, extra = {}) => fakeContext({
   files: {
-    [`${GLOBAL}/package.json`]: JSON.stringify({ dependencies: { rigup: spec } }),
+    [`${GLOBAL}/package.json`]: JSON.stringify({ dependencies: { '@sychusdev/rigup': spec } }),
     [`${GLOBAL}/pnpm-lock.yaml`]: LOCK,
-    [`${APP}/package.json`]: JSON.stringify({ name: 'rigup', version: '0.2.0' }),
+    [`${APP}/package.json`]: JSON.stringify({ name: '@sychusdev/rigup', version: '0.2.0' }),
     ...(extra.files || {}),
   },
   overrides: extra.overrides || {},
@@ -42,11 +42,11 @@ test('findInstall walks up to the global project; null from a checkout', () => {
   assert.equal(findInstall(fakeContext()), null);
 });
 
-test('updateSelf from npm: nothing when current, pnpm add -g rigup@latest when behind', () => {
-  const current = withApp(installed('^0.2.0', { overrides: { 'npm view rigup version': ok('0.2.0\n') } }));
+test('updateSelf from npm: nothing when current, pnpm add -g @sychusdev/rigup@latest when behind', () => {
+  const current = withApp(installed('^0.2.0', { overrides: { 'npm view @sychusdev/rigup version': ok('0.2.0\n') } }));
   assert.deepEqual(updateSelf(current), { status: 'ok', text: 'rigup 0.2.0 is the latest', changed: false });
   assert.ok(!current.calls.some(c => c.key.startsWith('pnpm')));
-  const behind = withApp(installed('^0.2.0', { overrides: { 'npm view rigup version': ok('0.3.1\n'), 'pnpm add -g rigup@latest': ok('') } }));
+  const behind = withApp(installed('^0.2.0', { overrides: { 'npm view @sychusdev/rigup version': ok('0.3.1\n'), 'pnpm add -g @sychusdev/rigup@latest': ok('') } }));
   assert.deepEqual(updateSelf(behind), { status: 'ok', text: 'rigup 0.2.0 → 0.3.1', changed: true });
 });
 

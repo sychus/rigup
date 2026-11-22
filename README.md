@@ -24,8 +24,10 @@ plugins, scopes, auto-update) and adds what it lacks for a team:
 ## Install
 
 ```bash
-pnpm add -g rigup
+pnpm add -g @sychusdev/rigup
 ```
+
+The package is scoped; the command is `rigup`.
 
 Needs Node 22+ and Claude Code 2.1.292+. macOS and Linux.
 
@@ -67,7 +69,7 @@ step that fails (run it again after fixing it; it picks up where it left off):
 
 One command updates everything:
 
-1. **rigup itself**: from npm (`pnpm add -g rigup@latest` when a newer version exists), or, for a
+1. **rigup itself**: from npm (`pnpm add -g @sychusdev/rigup@latest` when a newer version exists), or, for a
    git install, from the same repo and branch when its commit moved. Run from a checkout, it
    skips this step.
 2. **Every source**: refreshes each registered marketplace, and rebuilds `rigup-local` from your

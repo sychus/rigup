@@ -1,5 +1,5 @@
 {
-  "name": "rigup",
+  "name": "@sychusdev/rigup",
   "version": "0.2.0",
   "description": "Set up Claude Code with your skills, agents and commands from any marketplace repo or local folder, and keep every machine the same.",
   "type": "module",
@@ -34,5 +34,8 @@
     "url": "https://github.com/sychus/rigup/issues"
   },
   "homepage": "https://github.com/sychus/rigup#readme",
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "publishConfig": {
+    "access": "public"
+  }
 }
