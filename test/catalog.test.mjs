@@ -23,6 +23,8 @@ const names = entries => entries.map(e => `${e.plugin}/${e.kind}/${e.name}`);
 test('frontmatter: quoted, folded and missing descriptions', () => {
   assert.equal(frontmatterDescription('---\ndescription: "Hi."\n---'), 'Hi.');
   assert.equal(frontmatterDescription('---\ndescription: >\n  a\n  b\n---'), 'a b');
+  // The folded block stops at the next key; other keys' list items are not part of it.
+  assert.equal(frontmatterDescription('---\ndescription: >\n  Does a thing\nallowed-tools:\n  - Bash\n---'), 'Does a thing');
   assert.equal(frontmatterDescription('no frontmatter'), null);
   assert.equal(shortDescription('One. Two.'), 'One');
 });

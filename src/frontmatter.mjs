@@ -9,7 +9,13 @@ export function frontmatterDescription(text) {
   if (i === -1) return null;
   let value = lines[i].replace(/^description:\s*/, '');
   if (/^[>|][-+]?\s*$/.test(value)) {
-    value = lines.slice(i + 1).filter(l => /^\s+\S/.test(l)).map(l => l.trim()).join(' ');
+    // The block ends at the first line that is not indented (the next key).
+    const block = [];
+    for (const l of lines.slice(i + 1)) {
+      if (!/^\s+\S/.test(l)) break;
+      block.push(l.trim());
+    }
+    value = block.join(' ');
   }
   value = value.trim().replace(/^["']|["']$/g, '').trim();
   return value || null;

@@ -105,7 +105,9 @@ export function updateSelf(ctx) {
       latest = res.status === 0 ? parseLsRemote(res.stdout) : null;
       if (latest) break;
     }
-    if (latest && install.commit === latest) return { status: 'ok', text: `rigup is up to date (${shortSha(latest)})`, changed: false };
+    // Unknown remote commit: never reinstall blindly, say so instead.
+    if (!latest) return { status: 'info', text: 'could not check the latest rigup commit (no git access without a prompt)', changed: false };
+    if (install.commit === latest) return { status: 'ok', text: `rigup is up to date (${shortSha(latest)})`, changed: false };
     const res = ctx.run('pnpm', ['add', '-g', install.spec], { timeout: 300000 });
     if (res.status !== 0) return { status: 'fail', text: 'could not update rigup', detail: `pnpm add -g "${install.spec}"`, changed: false };
     return { status: 'ok', text: `rigup ${shortSha(install.commit)} → ${shortSha(latest)}`, changed: true };
@@ -193,6 +195,7 @@ export function runUpdate(ctx, { color = false, log = console.log } = {}) {
   //    their folder changed since the installed copy, since a local plugin has no version.
   const updated = [];
   const managed = [];
+  let pluginFailures = 0;
   let total = 0;
   for (const s of facts.sources) {
     for (const p of s.installed) {
@@ -209,13 +212,14 @@ export function runUpdate(ctx, { color = false, log = console.log } = {}) {
       else if (res.status !== 0) {
         step('fail', `could not update ${name}`, `claude plugin update ${p.id}`);
         failed = true;
+        pluginFailures++;
       }
     }
   }
   if (updated.length) {
     step('ok', `updated: ${updated.join(', ')} (${updated.length} plugin${updated.length === 1 ? '' : 's'})`);
     changed = true;
-  } else {
+  } else if (!pluginFailures) {
     step('ok', `plugins are up to date (${total})`);
   }
   if (managed.length) step('info', `left to your organization's managed settings: ${managed.join(', ')}`);

@@ -82,7 +82,11 @@ test('updateSelf from git: compares the installed commit with the branch head', 
     'pnpm add -g github:sychus/rigup': ok(''),
   } }));
   assert.equal(updateSelf(newer).text, 'rigup aaaaaaa → bbbbbbb');
-  const broken = withApp(installed('github:sychus/rigup', { overrides: { 'pnpm add -g github:sychus/rigup': failed() } }));
+  // Remote commit unknown (no access): report it, never reinstall blindly.
+  const unknown = withApp(installed('github:sychus/rigup'));
+  assert.equal(updateSelf(unknown).status, 'info');
+  assert.ok(!unknown.calls.some(c => c.key.startsWith('pnpm add')));
+  const broken = withApp(installed('github:sychus/rigup', { overrides: { 'git ls-remote git@github.com:sychus/rigup.git HEAD': ok(`${'c'.repeat(40)}\tHEAD\n`), 'pnpm add -g github:sychus/rigup': failed() } }));
   assert.equal(updateSelf(broken).status, 'fail');
 });
 
@@ -149,4 +153,6 @@ test('runUpdate: a failed refresh or plugin update fails the run but the rest st
   assert.equal(runUpdate(ctx, { log: l => out.push(l) }), 1);
   assert.match(out.join('\n'), /✖ could not refresh acme\/claude-skills/);
   assert.match(out.join('\n'), /✖ could not update review/);
+  // After a failed plugin update, never claim the plugins are up to date.
+  assert.doesNotMatch(out.join('\n'), /plugins are up to date/);
 });
