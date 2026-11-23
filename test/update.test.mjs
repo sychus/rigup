@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findInstall, gitSpecTarget, isGitSpec, lockCommit, runUpdate, updateSelf } from '../src/update.mjs';
+import { findInstall, pnpmGlobalPath, gitSpecTarget, isGitSpec, lockCommit, runUpdate, updateSelf } from '../src/update.mjs';
 import { ACME_LOCATION, CLONE_HEAD, fakeContext, failed, MY_SKILLS, ok, REMOTE_HEAD } from './helpers.mjs';
 
 const GLOBAL = '/home/dev/.local/share/pnpm/global/v11/abc';
@@ -42,10 +42,34 @@ test('findInstall walks up to the global project; null from a checkout', () => {
   assert.equal(findInstall(fakeContext()), null);
 });
 
+// pnpm 12: the global project holds a symlink into the store; Node runs the store's real path.
+const STORE = '/home/dev/.local/share/pnpm/store/v11/links/@sychusdev/rigup/0.2.0/xyz/node_modules/@sychusdev/rigup';
+const LISTED = `${GLOBAL}/node_modules/@sychusdev/rigup`;
+const PNPM_LS = ok(JSON.stringify([{ path: '/g', dependencies: { '@sychusdev/rigup': { version: '0.2.0', path: LISTED } } }]));
+const storeInstall = (realOfListed, extra = {}) => Object.assign(installed('^0.2.0', { overrides: { 'pnpm ls -g --json --depth=0': PNPM_LS, ...extra } }), {
+  appDir: STORE,
+  realpath: p => (p === LISTED ? realOfListed : p),
+});
+
+test('findInstall on pnpm 12 (package in the store): asks pnpm where the global project is', () => {
+  assert.equal(pnpmGlobalPath(storeInstall(STORE)), LISTED);
+  assert.deepEqual(findInstall(storeInstall(STORE)), { spec: '^0.2.0', commit: SHA });
+});
+
+test('findInstall from a checkout ignores the global copy pnpm lists', () => {
+  // pnpm lists a global rigup, but the code running is elsewhere (a checkout): not ours to update.
+  assert.equal(findInstall(storeInstall('/somewhere/else')), null);
+});
+
+test('findInstall falls back to walking up from the path the shim ran', () => {
+  const ctx = Object.assign(installed('^0.2.0'), { appDir: STORE, entryPath: `${LISTED}/rigup.mjs` });
+  assert.deepEqual(findInstall(ctx), { spec: '^0.2.0', commit: SHA });
+});
+
 test('updateSelf from npm: nothing when current, pnpm add -g @sychusdev/rigup@latest when behind', () => {
   const current = withApp(installed('^0.2.0', { overrides: { 'npm view @sychusdev/rigup version': ok('0.2.0\n') } }));
   assert.deepEqual(updateSelf(current), { status: 'ok', text: 'rigup 0.2.0 is the latest', changed: false });
-  assert.ok(!current.calls.some(c => c.key.startsWith('pnpm')));
+  assert.ok(!current.calls.some(c => c.key.startsWith('pnpm add')));
   const behind = withApp(installed('^0.2.0', { overrides: { 'npm view @sychusdev/rigup version': ok('0.3.1\n'), 'pnpm add -g @sychusdev/rigup@latest': ok('') } }));
   assert.deepEqual(updateSelf(behind), { status: 'ok', text: 'rigup 0.2.0 → 0.3.1', changed: true });
 });

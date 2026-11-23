@@ -84,6 +84,8 @@ export function fakeContext({ overrides = {}, files = {}, mtimes = {}, env = {},
     home: HOME, cwd: `${HOME}/work`,
     configDir: `${HOME}/.claude`, configFile: CONFIG_FILE, dataDir: DATA_DIR, cacheDir: `${HOME}/.cache/rigup`,
     appDir: '/opt/rigup',
+    entryPath: null,
+    realpath: p => p,
     run(cmd, args, opts) {
       const key = [cmd, ...args].join(' ');
       calls.push({ key, opts });

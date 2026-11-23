@@ -3,7 +3,7 @@
 
 import { spawnSync } from 'node:child_process';
 import {
-  cpSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync,
+  cpSync, lstatSync, mkdirSync, realpathSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -27,6 +27,8 @@ export function realContext() {
     cacheDir: path.join(xdg('XDG_CACHE_HOME', '.cache'), 'rigup'),
     // Folder rigup.mjs runs from: `rigup update` finds how it was installed from here.
     appDir: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+    // The path the shim ran (not symlink-resolved), to find a pnpm global project from.
+    entryPath: process.argv[1] ? path.resolve(process.argv[1]) : null,
 
     run(cmd, args, { timeout = 30000, env = {} } = {}) {
       const res = spawnSync(cmd, args, {
@@ -60,6 +62,13 @@ export function realContext() {
         return { isDir: st.isDirectory(), isFile: st.isFile(), isSymlink, mtimeMs: st.mtimeMs };
       } catch {
         return null;
+      }
+    },
+    realpath(target) {
+      try {
+        return realpathSync(target);
+      } catch {
+        return target;
       }
     },
     /** Names in a folder, or null when it cannot be read. */

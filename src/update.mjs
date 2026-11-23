@@ -35,16 +35,53 @@ export function lockCommit(lockText) {
 }
 
 /**
- * How rigup was installed: walks up from its own folder to the pnpm global project whose
- * package.json depends on rigup. Returns { spec, commit } or null (run from a checkout, npx…).
+ * Where pnpm says rigup is installed globally (the package folder), or null.
+ * `pnpm ls -g --json` is authoritative and fast; it knows every pnpm layout.
+ */
+export function pnpmGlobalPath(ctx) {
+  const res = ctx.run('pnpm', ['ls', '-g', '--json', '--depth=0'], { timeout: 15000 });
+  const list = res.status === 0 ? parseCliJson(res.stdout) : null;
+  for (const project of Array.isArray(list) ? list : []) {
+    const dep = project && project.dependencies && project.dependencies[PACKAGE];
+    if (dep && typeof dep.path === 'string') return dep.path;
+  }
+  return null;
+}
+
+/** The global project folder that holds a package folder (".../<project>/node_modules/<pkg>"). */
+const projectOf = pkgPath => {
+  const i = pkgPath.lastIndexOf(`${path.sep}node_modules${path.sep}`);
+  return i === -1 ? null : pkgPath.slice(0, i);
+};
+
+/** { spec, commit } from a pnpm global project folder that depends on rigup, or null. */
+function readProject(ctx, dir) {
+  const pkg = parseJson(ctx.readFile(path.join(dir, 'package.json')));
+  const spec = pkg && pkg.dependencies && pkg.dependencies[PACKAGE];
+  return typeof spec === 'string' ? { spec, commit: lockCommit(ctx.readFile(path.join(dir, 'pnpm-lock.yaml'))) } : null;
+}
+
+/**
+ * How the running rigup was installed: { spec, commit } or null (a checkout, npx…).
+ *  1. Ask pnpm where its global rigup is, and use it only if that is the code running now
+ *     (same real path), so running from a checkout never updates the global copy.
+ *  2. Otherwise walk up from the path the shim ran and from rigup's own folder. pnpm 12 keeps
+ *     packages in its store, so the real path alone never reaches the global project.
  */
 export function findInstall(ctx) {
-  let dir = ctx.appDir;
-  for (let i = 0; i < 8 && dir && dir !== path.dirname(dir); i++) {
-    dir = path.dirname(dir);
-    const pkg = parseJson(ctx.readFile(path.join(dir, 'package.json')));
-    const spec = pkg && pkg.dependencies && pkg.dependencies[PACKAGE];
-    if (typeof spec === 'string') return { spec, commit: lockCommit(ctx.readFile(path.join(dir, 'pnpm-lock.yaml'))) };
+  const listed = pnpmGlobalPath(ctx);
+  if (listed && ctx.realpath(listed) === ctx.realpath(ctx.appDir)) {
+    const project = projectOf(listed);
+    const found = project && readProject(ctx, project);
+    if (found) return found;
+  }
+  for (const start of [ctx.entryPath && path.dirname(ctx.entryPath), ctx.appDir].filter(Boolean)) {
+    let dir = start;
+    for (let i = 0; i < 8 && dir && dir !== path.dirname(dir); i++) {
+      dir = path.dirname(dir);
+      const found = readProject(ctx, dir);
+      if (found) return found;
+    }
   }
   return null;
 }
