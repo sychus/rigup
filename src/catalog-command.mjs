@@ -67,6 +67,16 @@ export function hasMcp(ctx, pluginDir) {
   return Boolean(manifest.mcpServers);
 }
 
+/**
+ * True when a plugin ships hooks (hooks/hooks.json or hooks in plugin.json). They run on their
+ * own, so their use never shows up as a skill or agent call.
+ */
+export function hasHooks(ctx, pluginDir) {
+  if (ctx.stat(path.join(pluginDir, 'hooks', 'hooks.json'))) return true;
+  const manifest = parseJson(ctx.readFile(path.join(pluginDir, PLUGIN_MANIFEST_PATH))) || {};
+  return Boolean(manifest.hooks);
+}
+
 /** Folder of a catalog plugin inside its marketplace, or null when it lives elsewhere. */
 export function pluginFolder(root, catalog, plugin) {
   if (typeof plugin.source !== 'string') return null;
@@ -80,10 +90,17 @@ export function loadCatalog(ctx, facts = gatherFacts(ctx, { checkAccess: false }
   const entries = [];
   const notes = [];
   const mcp = new Set();
+  // pluginId -> what it runs without being called (['hooks', 'MCP servers']), for every plugin read.
+  const alwaysOn = {};
   for (const s of facts.sources) {
     const add = (plugin, pluginDir, opts) => {
       const pluginId = `${plugin}@${s.marketplaceName}`;
-      if (hasMcp(ctx, pluginDir)) mcp.add(pluginId);
+      alwaysOn[pluginId] = [];
+      if (hasHooks(ctx, pluginDir)) alwaysOn[pluginId].push('hooks');
+      if (hasMcp(ctx, pluginDir)) {
+        mcp.add(pluginId);
+        alwaysOn[pluginId].push('MCP servers');
+      }
       for (const c of scanPlugin(ctx, pluginDir, opts)) entries.push(entry(ctx, { source: s.label, plugin, pluginId, ...c }));
     };
     if (s.kind === 'plugin' || s.kind === 'flat') {
@@ -112,7 +129,7 @@ export function loadCatalog(ctx, facts = gatherFacts(ctx, { checkAccess: false }
     }
     if (external.length) notes.push(`${s.label}: ${external.join(', ')} live outside the marketplace repo; their contents show once installed (rigup setup)`);
   }
-  return { entries: sortEntries(entries), notes, facts, mcp };
+  return { entries: sortEntries(entries), notes, facts, mcp, alwaysOn };
 }
 
 /** Plugin ids installed and enabled here, or null when claude cannot say. */

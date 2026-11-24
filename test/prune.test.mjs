@@ -17,6 +17,7 @@ const NOW = Date.parse('2026-11-24T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
 const PROJECTS = `${HOME}/.claude/projects`;
 
+const ARRAY_COMMAND_LINE = '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<command-message>docs:write</command-message>\\n<command-name>/docs:write</command-name>\\n<command-args>x</command-args>"}]}}';
 const SKILL_LINE = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"review:pr-review"}}]}}';
 const AGENT_LINE = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"release:shipper","prompt":"x"}}]}}';
 const COMMAND_LINE = '{"type":"user","message":{"role":"user","content":"<command-message>my-skills:hello</command-message>\\n<command-name>/my-skills:hello</command-name>"}}';
@@ -25,11 +26,11 @@ const QUOTED = [
   '{"type":"user","message":{"content":[{"type":"tool_result","content":"{\\"skill\\":\\"release:ship\\"}"}]}}',
   '{"type":"user","message":{"content":[{"type":"tool_result","content":"   6 <command-name>/release:ship</command-name>"}]}}',
 ].join('\n');
-const NAMES = new Set(['review', 'release', 'my-skills']);
+const NAMES = new Set(['review', 'release', 'my-skills', 'docs']);
 
 test('scanUsage: skills, agents and typed commands of known plugins; quoted text does not count', () => {
-  const uses = scanUsage([SKILL_LINE, SKILL_LINE, AGENT_LINE, COMMAND_LINE, QUOTED, '{"name":"Skill","input":{"skill":"other:x"}}'].join('\n'), NAMES);
-  assert.deepEqual(Object.fromEntries(uses), { review: 2, release: 1, 'my-skills': 1 });
+  const uses = scanUsage([SKILL_LINE, SKILL_LINE, AGENT_LINE, COMMAND_LINE, ARRAY_COMMAND_LINE, QUOTED, '{"name":"Skill","input":{"skill":"other:x"}}'].join('\n'), NAMES);
+  assert.deepEqual(Object.fromEntries(uses), { review: 2, release: 1, 'my-skills': 1, docs: 1 });
   assert.equal(scanUsage(null, NAMES).size, 0);
 });
 
@@ -50,6 +51,7 @@ const report = (extra = {}) => pruneReport({
   plugins: PLUGINS,
   usage: new Map([['review', { uses: 3, lastSeen: NOW - DAY }]]),
   tokens: { 'release@acme-skills': 120, 'my-skills@rigup-local': 30 },
+  alwaysOn: Object.fromEntries(PLUGINS.map(p => [p.id, []])),
   oldest: NOW - 40 * DAY,
   now: NOW,
   days: 28,
@@ -82,6 +84,15 @@ test('formatPrune: grouped by source, with what each costs and what removing sav
   assert.match(formatPrune(report({ usage: used })), /Nothing to prune: every plugin was used or is too new to tell\./);
 });
 
+test('pruneReport: hooks or MCP servers, or files not read, are never suggested', () => {
+  const r = report({ alwaysOn: { 'release@acme-skills': ['hooks'] } });
+  assert.deepEqual(r.unused, []);
+  const text = formatPrune(r);
+  assert.match(text, /release {3,}no use[^\n]*has hooks: use not measured, never suggested/);
+  assert.match(text, /my-skills[^\n]*files not read: hooks cannot be ruled out/);
+  assert.match(text, /Nothing to prune: every plugin was used or runs hooks or MCP servers rigup cannot measure\./);
+});
+
 test('excludePlugins: "*" sources get an exclude list; explicit lists drop the name', () => {
   const raw = { sources: [{ source: 'acme/claude-skills' }, { source: 'acme/other', plugins: ['a', 'b'] }] };
   const out = excludePlugins(excludePlugins(raw, 'acme/claude-skills', ['release'], {}), 'acme/other', ['a'], {});
@@ -102,8 +113,14 @@ test('an excluded plugin is not wanted: setup does not reinstall it and doctor d
 const LATER = Date.parse('2026-12-20T12:00:00Z');
 
 /** The fake machine with transcripts on disk and a fixed clock. */
-function pruneMachine(transcripts) {
-  const files = {};
+const CACHE = `${HOME}/.claude/plugins/cache/acme-skills`;
+// The installed copies prune reads (release has one skill; review too).
+const PLUGIN_FILES = {
+  [`${CACHE}/release/abc123def456/skills/ship/SKILL.md`]: '---\nname: ship\ndescription: Ship it.\n---\n',
+  [`${CACHE}/review/abc123def456/skills/pr-review/SKILL.md`]: '---\nname: pr-review\ndescription: Review a PR.\n---\n',
+};
+function pruneMachine(transcripts, extra = {}) {
+  const files = { ...PLUGIN_FILES, ...extra };
   for (const t of transcripts) files[t.path] = t.text;
   const ctx = fakeContext({ files });
   ctx.now = () => new Date(LATER);
@@ -138,4 +155,13 @@ test('rigup prune: reports and changes nothing; --yes uninstalls and leaves it o
   assert.ok(!yes.calls.some(c => /uninstall review/.test(c.key)));
   assert.deepEqual(loadConfig(yes).sources.find(s => s.spec.id === 'acme/claude-skills').exclude, ['release']);
   assert.ok(yes.writes.some(w => w.file === CONFIG_FILE));
+});
+
+test('rigup prune --yes never uninstalls a plugin that ships hooks', () => {
+  const out = [];
+  const io = { log: l => out.push(l), error: l => out.push(l) };
+  const hooks = pruneMachine(TRANSCRIPTS, { [`${CACHE}/release/abc123def456/hooks/hooks.json`]: '{"hooks":{}}' });
+  assert.equal(runPrune(hooks, ['--yes'], io), 0);
+  assert.match(out.join('\n'), /release[^\n]*has hooks: use not measured/);
+  assert.ok(!hooks.calls.some(c => /plugin uninstall/.test(c.key)));
 });

@@ -127,6 +127,9 @@ change it):
 * a plugin with no use in the window is listed as unused, with what it costs per prompt.
   Nothing is suggested when the transcripts do not go back the whole window, or for a plugin
   installed inside it.
+* a plugin that ships hooks or MCP servers is never suggested. They run on their own (a guard
+  that checks every edit), so their use is not in the transcripts, and removing the plugin would
+  turn them off. The same goes for a plugin whose files rigup could not read.
 * `rigup prune --yes` uninstalls the unused plugins and leaves them out of your config, so
   `rigup setup` does not bring them back: they go to the source's `exclude` list (or out of its
   `plugins` list). A local folder source, or a plugin installed by someone else (a managed

@@ -9,6 +9,10 @@
 //   a slash command you typed       "content":"<command-message>…</command-message>\n<command-name>/<plugin>:<name>
 // The same text quoted in a tool result or a file does not count: there its quotes are escaped
 // (\"skill\":…), and a <command-name> tag is not the start of a message's content.
+// Typed commands also appear as the first block of an array content
+// ("content":[{"type":"text","text":"<command-message>…), which counts the same.
+// Hooks and MCP servers run without being called, so their use is not in these signals: a plugin
+// that ships either (or whose files could not be read) is never suggested.
 // The transcript names the plugin, not its marketplace: two sources with a plugin of the same
 // name share its uses, which can only make prune suggest less, never more.
 
@@ -20,7 +24,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const SIGNALS = [
   /"name":"Skill","input":\{"skill":"([A-Za-z0-9._-]+):/g,
   /"subagent_type":"([A-Za-z0-9._-]+):/g,
-  /"content":"<command-message>[^"<]*<\/command-message>\\n<command-name>\/([A-Za-z0-9._-]+):/g,
+  /"content":(?:"|\[\{"type":"text","text":")<command-message>[^"<]*<\/command-message>\\n<command-name>\/([A-Za-z0-9._-]+):/g,
 ];
 
 /** Uses per plugin name in one transcript, for the names in `names` only: Map(name -> count). */
@@ -49,24 +53,30 @@ export function parseDays(args) {
  *   plugins   [{ id, name, source (label), sourceId, kind (source kind), scope, installedAt }]
  *   usage     Map(name -> { uses, lastSeen })
  *   tokens    { pluginId: prompt tokens }
+ *   alwaysOn  { pluginId: ['hooks', 'MCP servers'] } for every plugin whose files were read; a
+ *             plugin missing from it could not be read
  *   oldest    mtime of the oldest transcript (ms), or null
  * A plugin is unused when it had no use in the whole window, the transcripts go back that far,
- * and it was not installed inside the window.
+ * it was not installed inside the window, and it ships no hooks or MCP servers (their use cannot
+ * be measured; a plugin whose files were not read is treated the same).
  */
-export function pruneReport({ plugins, usage, tokens = {}, oldest, now, days }) {
+export function pruneReport({ plugins, usage, tokens = {}, alwaysOn = {}, oldest, now, days }) {
   const cutoff = now - days * DAY;
   const enoughHistory = oldest !== null && oldest !== undefined && oldest <= cutoff;
   const rows = plugins.map(p => {
     const u = usage.get(p.name) || { uses: 0, lastSeen: null };
     const since = p.installedAt ? Date.parse(p.installedAt) : null;
     const recent = since !== null && since > cutoff;
+    const runs = alwaysOn[p.id] || null;
     return {
       ...p,
+      alwaysOn: runs || [],
+      measured: Boolean(runs) && !runs.length,
       uses: u.uses,
       lastSeen: u.lastSeen ? new Date(u.lastSeen).toISOString() : null,
       tokens: tokens[p.id] || 0,
       recent,
-      unused: enoughHistory && u.uses === 0 && !recent,
+      unused: enoughHistory && u.uses === 0 && !recent && Boolean(runs) && !runs.length,
     };
   });
   return { days, enoughHistory, rows, unused: rows.filter(r => r.unused) };
@@ -108,7 +118,10 @@ export function formatPrune(report, { color = false } = {}) {
       source = r.source;
       lines.push(paint(4, source));
     }
-    const note = r.unused ? paint(33, '  · unused') : r.recent ? paint(2, '  · installed recently, too soon to tell') : '';
+    const note = r.unused ? paint(33, '  · unused')
+      : r.alwaysOn.length ? paint(2, `  · has ${r.alwaysOn.join(' and ')}: use not measured, never suggested`)
+        : !r.measured ? paint(2, '  · files not read: hooks cannot be ruled out, never suggested')
+          : r.recent ? paint(2, '  · installed recently, too soon to tell') : '';
     lines.push(`  ${paint(1, r.name.padEnd(width))}  ${use(r)} ${paint(2, `· ${formatTokens(r.tokens)} tokens per prompt`)}${note}`);
   }
 
@@ -116,8 +129,12 @@ export function formatPrune(report, { color = false } = {}) {
   if (!report.enoughHistory) {
     lines.push(`Not enough history yet: this machine's Claude transcripts do not go back ${report.days} days. Nothing to suggest.`);
   } else if (!report.unused.length) {
-    const tooNew = report.rows.some(r => r.recent && !r.uses);
-    lines.push(paint(32, `✔ Nothing to prune: every plugin was used${tooNew ? ' or is too new to tell' : ''}.`));
+    const idle = report.rows.filter(r => !r.uses);
+    const reasons = [
+      idle.some(r => r.measured && r.recent) && 'is too new to tell',
+      idle.some(r => !r.measured) && 'runs hooks or MCP servers rigup cannot measure',
+    ].filter(Boolean);
+    lines.push(paint(32, `✔ Nothing to prune: every plugin was used${reasons.length ? ` or ${reasons.join(' or ')}` : ''}.`));
   } else {
     const saved = report.unused.reduce((sum, r) => sum + r.tokens, 0);
     lines.push(`Unused for ${report.days} days: removing ${report.unused.length === 1 ? 'it' : 'them'} saves ${formatTokens(saved)} tokens on every prompt.`);

@@ -46,12 +46,15 @@ export function runPrune(ctx, args, { color = false, log = console.log, error = 
     .filter(p => p.enabled !== false)
     .map(p => ({ id: p.id, name: p.id.split('@')[0], source: s.label, sourceId: s.id, kind: s.kind, scope: p.scope, installedAt: p.installedAt || null })));
   let tokens = {};
+  let alwaysOn = {};
   try {
-    for (const e of loadCatalog(ctx, facts).entries) tokens[e.pluginId] = (tokens[e.pluginId] || 0) + (e.tokens || 0);
-  } catch { tokens = {}; }
+    const catalog = loadCatalog(ctx, facts);
+    for (const e of catalog.entries) tokens[e.pluginId] = (tokens[e.pluginId] || 0) + (e.tokens || 0);
+    alwaysOn = catalog.alwaysOn;
+  } catch { tokens = {}; alwaysOn = {}; }
 
   const { usage, oldest } = readUsage(ctx, days, new Set(plugins.map(p => p.name)));
-  const report = pruneReport({ plugins, usage, tokens, oldest, now: ctx.now().getTime(), days });
+  const report = pruneReport({ plugins, usage, tokens, alwaysOn, oldest, now: ctx.now().getTime(), days });
   if (args.includes('--json')) {
     log(JSON.stringify({ ...report, unused: report.unused.map(r => r.id) }, null, 2));
     return 0;
