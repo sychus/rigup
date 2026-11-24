@@ -11,7 +11,7 @@ import { forcesPluginUpdates, isTruthy } from './checks.mjs';
 import { gatherFacts } from './facts.mjs';
 import { localEntries, writeLocalMarketplace } from './local-marketplace.mjs';
 import { compareVersions, parseJson } from './parse.mjs';
-import { marketplaceAddArg } from './sources.mjs';
+import { marketplaceAddArg, marketplaceSource } from './sources.mjs';
 
 /**
  * An action is one of:
@@ -116,7 +116,10 @@ export function planSetup(facts, env) {
   const settings = facts.userSettings || {};
   const known = settings.extraKnownMarketplaces || {};
   const remotes = usable.filter(s => s.kind === 'remote');
-  const needAuto = remotes.filter(s => !s.marketplace || !(known[s.marketplace.name] && known[s.marketplace.name].autoUpdate === true));
+  // The entry needs its source: without one Claude Code rejects it as invalid and ignores
+  // autoUpdate (rigup <= 0.2 wrote it that way, so this also repairs those machines).
+  const autoOn = s => { const e = known[s.marketplace.name]; return Boolean(e && e.autoUpdate === true && e.source); };
+  const needAuto = remotes.filter(s => !s.marketplace || !autoOn(s));
   const force = UPDATE_DISABLING_VARS.some(k => isTruthy(env[k])) && env[FORCE_PLUGIN_UPDATES_VAR] !== '1' && !forcesPluginUpdates(facts);
   if (needAuto.length || force) {
     actions.push({
@@ -136,6 +139,11 @@ export function planSetup(facts, env) {
 }
 
 /** Deep-merges `patch` into `target` without dropping existing keys. Returns a new object. */
+/** "2026-11-24T15-09-45" (no colons, so the name works on every file system). */
+export function stamp(date) {
+  return date.toISOString().slice(0, 19).replace(/:/g, '-');
+}
+
 export function mergeSettings(target, patch) {
   const out = { ...(target || {}) };
   for (const [key, value] of Object.entries(patch)) {
@@ -210,9 +218,11 @@ export function applySetup(ctx, actions, { dryRun = false, facts, onStep = null 
 
     if (action.kind === 'settings') {
       const now = gatherFacts(ctx, { checkAccess: false });
-      const marketplaces = now.sources.filter(s => action.sources.includes(s.id) && s.marketplace).map(s => s.marketplace.name);
+      const marketplaces = now.sources.filter(s => action.sources.includes(s.id) && s.marketplace && marketplaceSource(s.spec));
       const patch = {};
-      if (marketplaces.length) patch.extraKnownMarketplaces = Object.fromEntries(marketplaces.map(n => [n, { autoUpdate: true }]));
+      if (marketplaces.length) {
+        patch.extraKnownMarketplaces = Object.fromEntries(marketplaces.map(s => [s.marketplace.name, { source: marketplaceSource(s.spec), autoUpdate: true }]));
+      }
       if (action.force) patch.env = { [FORCE_PLUGIN_UPDATES_VAR]: '1' };
       if (!Object.keys(patch).length) continue;
       const file = path.join(ctx.configDir, 'settings.json');
@@ -222,8 +232,16 @@ export function applySetup(ctx, actions, { dryRun = false, facts, onStep = null 
         record({ title: action.title, status: 'failed', detail: `${file} is not valid JSON; fix it by hand, rigup will not overwrite it` });
         return { steps, changed };
       }
-      ctx.writeFile(file, `${JSON.stringify(mergeSettings(current, patch), null, 2)}\n`);
-      record({ title: action.title, status: 'done' });
+      const next = `${JSON.stringify(mergeSettings(current, patch), null, 2)}\n`;
+      if (raw !== null && next === raw) {
+        record({ title: action.title, status: 'done' });
+        continue;
+      }
+      // A copy of the file as it was, so a change rigup made can always be undone by hand.
+      const backup = raw === null ? null : `${file}.rigup-backup-${stamp(ctx.now ? ctx.now() : new Date())}`;
+      if (backup) ctx.writeFile(backup, raw);
+      ctx.writeFile(file, next);
+      record({ title: action.title, status: 'done', detail: backup ? `previous settings saved to ${backup}` : null });
       changed = true;
       continue;
     }

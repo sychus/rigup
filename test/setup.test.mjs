@@ -154,3 +154,32 @@ test('dry run: shows the plan and runs nothing that changes the machine', () => 
 test('mergeSettings keeps unrelated keys and nested objects', () => {
   assert.deepEqual(mergeSettings({ a: 1, n: { x: 1 } }, { n: { y: 2 } }), { a: 1, n: { x: 1, y: 2 } });
 });
+
+test('an auto-update entry without its source (rigup <= 0.2) is repaired: Claude Code ignores it', () => {
+  const old = JSON.stringify({ extraKnownMarketplaces: { 'acme-skills': { autoUpdate: true } } });
+  const p = plan({ files: { [SETTINGS]: old } }).find(a => a.kind === 'settings');
+  assert.ok(p, 'setup plans the repair');
+  const ctx = fakeContext({ files: { [SETTINGS]: old } });
+  applySetup(ctx, [p], { facts: gatherFacts(ctx) });
+  const written = JSON.parse(ctx.writes.find(w => w.file === SETTINGS).content);
+  assert.deepEqual(written.extraKnownMarketplaces['acme-skills'], { autoUpdate: true, source: { source: 'github', repo: 'acme/claude-skills' } });
+});
+
+test('marketplaceSource: github and git keep their ref; local folders have none', async () => {
+  const { marketplaceSource, parseSpec } = await import('../src/sources.mjs');
+  assert.deepEqual(marketplaceSource(parseSpec('acme/skills@dev')), { source: 'github', repo: 'acme/skills', ref: 'dev' });
+  assert.deepEqual(marketplaceSource(parseSpec('https://gitlab.com/a/b.git#main')), { source: 'git', url: 'https://gitlab.com/a/b.git', ref: 'main' });
+  assert.deepEqual(marketplaceSource(parseSpec('git@gitlab.com:a/b.git')), { source: 'git', url: 'git@gitlab.com:a/b.git' });
+  assert.equal(marketplaceSource(parseSpec('/tmp/x')), null);
+});
+
+test('setup saves a copy of settings.json before changing it, and says where', () => {
+  const before = JSON.stringify({ theme: 'dark' });
+  const ctx = fakeContext({ files: { [SETTINGS]: before } });
+  ctx.now = () => new Date('2026-11-24T15:09:45.123Z');
+  const { steps } = applySetup(ctx, [{ kind: 'settings', title: 't', sources: ['acme/claude-skills'], force: false }], { facts: gatherFacts(ctx) });
+  const backup = `${SETTINGS}.rigup-backup-2026-11-24T15-09-45`;
+  assert.deepEqual(ctx.writes.map(w => w.file), [backup, SETTINGS]);
+  assert.equal(ctx.writes[0].content, before);
+  assert.match(steps[0].detail, /previous settings saved to .*rigup-backup-2026-11-24T15-09-45/);
+});

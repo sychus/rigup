@@ -71,6 +71,14 @@ test('auto-update off is a warning setup fixes', () => {
   assert.equal(r.by, 'setup');
 });
 
+test('auto-update set without the marketplace source (rigup <= 0.2) is not "on": Claude Code ignores it', () => {
+  const report = doctor(fakeContext({ files: { [`${HOME}/.claude/settings.json`]: JSON.stringify({ extraKnownMarketplaces: { 'acme-skills': { autoUpdate: true } } }) } }));
+  const r = section(report, 'Source acme').results.find(x => x.title.startsWith('auto-update'));
+  assert.equal(r.status, 'warn');
+  assert.match(r.title, /without the marketplace source/);
+  assert.equal(r.by, 'setup');
+});
+
 test('local folder edited after the installed copy: rigup update refreshes it', () => {
   const report = doctor(fakeContext({ mtimes: { [MY_SKILLS]: Date.parse('2026-11-20T00:00:00Z') } }));
   const r = section(report, 'Source ~/work/my-skills').results.find(x => x.title.startsWith('edited since'));

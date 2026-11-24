@@ -16,7 +16,7 @@ export function runSetup(ctx, { dryRun = false, color = false, log = console.log
   const plan = planSetup(facts, ctx.env);
   const printStep = step => {
     log(`  ${paint(COLOR[step.status], SYMBOL[step.status])} ${step.title}`);
-    if (step.detail) log(paint(2, `      ${step.status === 'planned' ? '' : 'fix: '}${step.detail}`));
+    if (step.detail) log(paint(2, `      ${['planned', 'done'].includes(step.status) ? '' : 'fix: '}${step.detail}`));
   };
 
   // Hints are advice, not work: a plan of only hints still means "nothing to do".

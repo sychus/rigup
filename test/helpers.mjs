@@ -73,7 +73,7 @@ export function fakeContext({ overrides = {}, files = {}, mtimes = {}, env = {},
     [path.join(ACME_LOCATION, '.claude-plugin/marketplace.json')]: JSON.stringify(ACME_CATALOG),
     [path.join(LOCAL_MP_DIR, '.claude-plugin/marketplace.json')]: JSON.stringify(LOCAL_CATALOG),
     [`${MY_SKILLS}/skills/hello/SKILL.md`]: '---\nname: hello\ndescription: Says hello.\n---\nHello.',
-    [`${HOME}/.claude/settings.json`]: JSON.stringify({ extraKnownMarketplaces: { 'acme-skills': { autoUpdate: true } } }),
+    [`${HOME}/.claude/settings.json`]: JSON.stringify({ extraKnownMarketplaces: { 'acme-skills': { source: { source: 'github', repo: 'acme/claude-skills' }, autoUpdate: true } } }),
     ...files,
   };
   for (const [k, v] of Object.entries(table)) if (v === null) delete table[k];

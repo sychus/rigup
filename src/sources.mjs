@@ -44,6 +44,16 @@ export function marketplaceAddArg(source) {
   return source.path;
 }
 
+/**
+ * The marketplace as declared in settings (extraKnownMarketplaces), or null for a local folder.
+ * Claude Code ignores an entry without its source, autoUpdate included.
+ */
+export function marketplaceSource(source) {
+  if (source.type === 'github') return { source: 'github', repo: source.repo, ...(source.ref ? { ref: source.ref } : {}) };
+  if (source.type === 'git') return { source: 'git', url: source.url, ...(source.ref ? { ref: source.ref } : {}) };
+  return null;
+}
+
 /** git URLs to try, without prompts, for a remote source (SSH first, like Claude Code). */
 export function gitUrls(source) {
   if (source.type === 'github') return [`git@github.com:${source.repo}.git`, `https://github.com/${source.repo}.git`];

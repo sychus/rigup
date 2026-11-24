@@ -122,7 +122,8 @@ export function checkSource(s, facts) {
     }
     if (s.kind === 'remote') {
       const entry = ((facts.userSettings && facts.userSettings.extraKnownMarketplaces) || {})[s.marketplace.name] || {};
-      if (entry.autoUpdate === true) results.push(ok('auto-update on'));
+      if (entry.autoUpdate === true && entry.source) results.push(ok('auto-update on'));
+      else if (entry.autoUpdate === true) results.push(warn('auto-update is set without the marketplace source, so Claude Code ignores it', 'rigup setup', 'setup'));
       else results.push(warn('auto-update off (Claude Code\'s default for third-party marketplaces)', 'rigup setup', 'setup'));
     }
   }
