@@ -3,7 +3,7 @@
 Set up Claude Code with your skills, agents and commands, from any marketplace repo or local
 folder, and keep every machine the same.
 
-> Status: early (0.2). Feedback and issues welcome.
+> Status: early (0.3). Feedback and issues welcome.
 
 ## Why
 
@@ -20,6 +20,9 @@ plugins, scopes, auto-update) and adds what it lacks for a team:
   the tools, environment variables and MCP connectors each plugin declares it needs.
 * **Local folders as first-class sources**: point at a folder of `SKILL.md`s and rigup wraps it
   as a plugin.
+* **What it costs, and what you do not use**: every plugin that is on adds its skills'
+  descriptions to every prompt. `rigup list` shows that cost per plugin, and `rigup prune` finds
+  the plugins you stopped using.
 
 ## Install
 
@@ -43,8 +46,14 @@ rigup doctor                                     # what is missing, and how to f
 rigup list                                       # every skill, agent and command you have
 rigup search pull request                        # find one by topic, and how to use it
 rigup changes --since 2w                         # what is new, updated, renamed or removed
+rigup prune                                      # plugins you did not use lately (--yes removes them)
 rigup update                                     # rigup, every source and every plugin
 ```
+
+Tab completion: `source <(rigup completion zsh)` in `~/.zshrc` (after `compinit`),
+`source <(rigup completion bash)` in `~/.bashrc`, or
+`rigup completion fish > ~/.config/fish/completions/rigup.fish`. It completes the commands, folders
+after `rigup add`, and your sources after `rigup remove`, from the config file only.
 
 ## What `rigup setup` does
 
@@ -59,9 +68,11 @@ step that fails (run it again after fixing it; it picks up where it left off):
 3. Registers each repo or local marketplace that is not registered yet, at user scope.
 4. Rebuilds `rigup-local` for local plugin and skills folders (a symlink to each plugin folder, a
    copy of each skills folder) and registers or refreshes it. Your folders are never modified.
-5. Turns on `autoUpdate` for the repos in your user `settings.json` (merged; an invalid file is
-   never overwritten), plus `FORCE_AUTOUPDATE_PLUGINS=1` when a variable in your shell turns
-   plugin updates off.
+5. Turns on `autoUpdate` for the repos in your user `settings.json`, with each marketplace's
+   source (Claude Code ignores an entry without one; rigup 0.2 wrote it that way, and setup
+   repairs it). Merged, an invalid file is never overwritten, and the file as it was is saved
+   next to it first (`settings.json.rigup-backup-<date>`). Plus `FORCE_AUTOUPDATE_PLUGINS=1`
+   when a variable in your shell turns plugin updates off.
 6. Installs, at user scope, every wanted plugin this machine does not have.
 7. Runs `doctor` again and lists what is left.
 
@@ -78,6 +89,12 @@ One command updates everything:
    is refreshed only when its folder changed since the installed copy.
 4. **What changed** in the repos that moved, from the same engine as `rigup changes`.
 
+You do not have to remember to run it: once a day, in the background and without slowing the
+command down, rigup checks for a newer version (npm, or the commit of its branch for a git
+install), and after any command shows `rigup has updates (…): run rigup update` (or the
+`npm install -g` command when rigup was not installed with pnpm). It stays quiet with `--json`,
+in a pipe, in CI, and with `NO_UPDATE_NOTIFIER` or `RIGUP_NO_UPDATE_NOTIFIER` set.
+
 ## What `rigup list` and `rigup search` do
 
 They answer "what exists?" across all your sources, for the plugins you picked. Repos and local
@@ -90,6 +107,33 @@ marked.
 matches above description matches above body matches, breaks ties by how often the topic is
 mentioned, and shows each match with how to use it (`/plugin:name`). Top 15; `--all` for every
 match. Both take `--json`.
+
+`rigup list` also shows about how many tokens each plugin adds to every prompt, and the total
+for the installed ones. Claude Code lists each skill, agent and command by name and description
+so the model can pick one, used or not. It is an estimate (characters / 4; a skill with
+`disable-model-invocation: true` is not listed to the model and counts 0), good to compare
+plugins, not an exact bill. A plugin that ships MCP servers is marked: their tool definitions
+cost tokens too, and rigup does not count them.
+
+## What `rigup prune` does
+
+Installing a plugin is easy; nobody remembers to take one out. `rigup prune` looks at the
+installed plugins of your sources and how often you used them in the last 28 days (`--days` to
+change it):
+
+* a skill the model ran, an agent it started, or a `/plugin:command` you typed, read from your
+  Claude transcripts (`~/.claude/projects`). They are read **on this machine only** and only the
+  plugin name of each use is kept; nothing is sent anywhere.
+* a plugin with no use in the window is listed as unused, with what it costs per prompt.
+  Nothing is suggested when the transcripts do not go back the whole window, or for a plugin
+  installed inside it.
+* `rigup prune --yes` uninstalls the unused plugins and leaves them out of your config, so
+  `rigup setup` does not bring them back: they go to the source's `exclude` list (or out of its
+  `plugins` list). A local folder source, or a plugin installed by someone else (a managed
+  policy, a project), only gets the command to run.
+
+The transcript names the plugin, not its marketplace, so two sources with a plugin of the same
+name share its uses; that can only make prune suggest less.
 
 ## What `rigup changes` does
 
@@ -138,7 +182,12 @@ sees the change; `rigup doctor` tells you when that is the case.
 }
 ```
 
-`plugins` defaults to `"*"`, every plugin in the source's catalog.
+`plugins` defaults to `"*"`, every plugin in the source's catalog. `exclude` leaves some out of
+`"*"` while new catalog plugins still arrive (`rigup prune --yes` adds to it):
+
+```json
+{ "source": "acme/claude-skills", "exclude": ["legacy-tools"] }
+```
 
 ## Declaring what a plugin needs: `requirements.json`
 

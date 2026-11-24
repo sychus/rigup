@@ -1,6 +1,6 @@
 {
   "name": "@sychusdev/rigup",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Set up Claude Code with your skills, agents and commands from any marketplace repo or local folder, and keep every machine the same.",
   "type": "module",
   "bin": {
