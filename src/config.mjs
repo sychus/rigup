@@ -8,7 +8,9 @@
 //     { "source": "acme/big-marketplace", "plugins": ["code-review", "release"] }
 //   ]
 // }
-// `plugins` defaults to "*" (every plugin in the source's catalog).
+// `plugins` defaults to "*" (every plugin in the source's catalog). `exclude` lists plugins to
+// leave out of "*" (rigup prune --yes adds to it), so new catalog plugins still arrive.
+//     { "source": "acme/claude-skills", "exclude": ["legacy"] }
 
 import { parseJson } from './parse.mjs';
 import { parseSpec } from './sources.mjs';
@@ -44,12 +46,17 @@ export function normalizeConfig(raw, { home, cwd } = {}) {
       errors.push(`sources[${i}]: "plugins" must be "*" or a list of plugin names`);
       return;
     }
+    const exclude = item.exclude === undefined ? [] : item.exclude;
+    if (!(Array.isArray(exclude) && exclude.every(p => typeof p === 'string'))) {
+      errors.push(`sources[${i}]: "exclude" must be a list of plugin names`);
+      return;
+    }
     if (seen.has(spec.id)) {
       errors.push(`sources[${i}]: ${spec.id} is listed twice`);
       return;
     }
     seen.add(spec.id);
-    sources.push({ source: item.source, plugins, spec });
+    sources.push({ source: item.source, plugins, exclude, spec });
   });
   return { sources, errors };
 }
@@ -77,6 +84,22 @@ export function addSource(raw, input, { plugins = null, home, cwd } = {}) {
   const entry = { source: spec.type === 'local' ? spec.path : spec.id };
   if (plugins) entry.plugins = plugins;
   return { ...raw, sources: [...(raw.sources || []), entry] };
+}
+
+/**
+ * Stops taking `names` from a source: dropped from an explicit `plugins` list, or added to
+ * `exclude` when the source takes "*". Returns a new raw config.
+ */
+export function excludePlugins(raw, sourceId, names, { home, cwd } = {}) {
+  const sources = (raw.sources || []).map(entry => {
+    const item = typeof entry === 'string' ? { source: entry } : { ...entry };
+    if (parseSpec(item.source, { home, cwd }).id !== sourceId) return entry;
+    const plugins = item.plugins === undefined ? '*' : item.plugins;
+    if (plugins === '*') item.exclude = [...new Set([...(item.exclude || []), ...names])].sort();
+    else item.plugins = plugins.filter(p => !names.includes(p));
+    return item;
+  });
+  return { ...raw, sources };
 }
 
 /** Removes a source by what the user typed (same parsing as add). Throws when it is not there. */

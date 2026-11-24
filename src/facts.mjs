@@ -70,9 +70,9 @@ export function gatherFacts(ctx, { checkAccess = true } = {}) {
 
 /** Everything about one configured source. */
 export function sourceFacts(ctx, entry, facts, { checkAccess = true } = {}) {
-  const { spec, plugins: selection } = entry;
+  const { spec, plugins: selection, exclude = [] } = entry;
   const out = {
-    id: spec.id, label: label(spec, ctx.home), spec, selection,
+    id: spec.id, label: label(spec, ctx.home), spec, selection, exclude,
     kind: null, marketplace: null, catalog: null, cloneHead: null, access: null,
     pluginName: null, inLocalMarketplace: false, newestMtime: null,
   };
@@ -113,7 +113,8 @@ export function sourceFacts(ctx, entry, facts, { checkAccess = true } = {}) {
   out.available = out.pluginName
     ? [out.pluginName]
     : ((out.catalog && out.catalog.plugins) || []).map(p => p.name).filter(Boolean).sort();
-  out.wanted = selection === '*' || out.pluginName ? out.available : [...selection].sort();
+  out.wanted = out.pluginName ? out.available
+    : selection === '*' ? out.available.filter(name => !exclude.includes(name)) : [...selection].sort();
   out.installed = out.marketplaceName
     ? facts.installed.filter(p => p.id.endsWith(`@${out.marketplaceName}`) && (!out.pluginName || p.id.split('@')[0] === out.pluginName))
     : [];

@@ -11,6 +11,7 @@ import { runSetup } from './src/setup-command.mjs';
 import { runList, runSearch } from './src/catalog-command.mjs';
 import { runChanges } from './src/changes-command.mjs';
 import { findInstall, runUpdate } from './src/update.mjs';
+import { runPrune } from './src/prune-command.mjs';
 
 const HELP = `rigup · set up Claude Code with your skills, agents and commands
 
@@ -30,6 +31,9 @@ Usage:
   rigup list [--json]   Every skill, agent and command of your sources, with what it does
   rigup search <words> [--all] [--json]
                         Find skills, agents and commands by topic, and how to use them
+  rigup prune [--days 28] [--yes] [--json]
+                        Plugins of your sources you did not use lately (read locally from your
+                        Claude transcripts); --yes uninstalls them and leaves them out of the config
   rigup --version       Print the version (and the commit, for a git install)
   rigup --help          Show this help
 
@@ -65,6 +69,7 @@ async function main(argv) {
   if (command === 'changes') return runChanges(realContext(), rest, { color });
   if (command === 'list') return runList(realContext(), rest, { color });
   if (command === 'search') return runSearch(realContext(), rest, { color });
+  if (command === 'prune') return runPrune(realContext(), rest, { color });
   if (command === 'doctor') {
     const report = doctor(realContext());
     if (rest.includes('--json')) console.log(JSON.stringify(report, null, 2));

@@ -69,8 +69,9 @@ export function rootsAt(ctx, s, hist, commit) {
   if (!catalog) return [];
   const pluginRoot = (catalog.metadata && catalog.metadata.pluginRoot) || '';
   const wanted = s.selection === '*' ? null : new Set(s.selection);
+  const excluded = new Set(s.exclude || []);
   return (catalog.plugins || [])
-    .filter(p => typeof p.source === 'string' && (!wanted || wanted.has(p.name)))
+    .filter(p => typeof p.source === 'string' && (!wanted || wanted.has(p.name)) && !excluded.has(p.name))
     .map(p => ({ prefix: join(hist.prefix, p.source.startsWith('.') ? p.source : join(pluginRoot, p.source)), plugin: p.name }));
 }
 

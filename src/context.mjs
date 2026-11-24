@@ -1,7 +1,7 @@
 // The real context: the only place rigup touches the process, the shell and the filesystem.
 // Tests build their own context with fixtures instead (test/helpers.mjs).
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   cpSync, lstatSync, mkdirSync, realpathSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
@@ -69,6 +69,33 @@ export function realContext() {
         return realpathSync(target);
       } catch {
         return target;
+      }
+    },
+    // Every file under a folder whose name ends with `ext`, with its modification time.
+    listFiles(dir, ext) {
+      let names = [];
+      try {
+        names = readdirSync(dir, { recursive: true });
+      } catch {
+        return [];
+      }
+      return names.filter(n => n.endsWith(ext)).flatMap(n => {
+        const file = path.join(dir, n);
+        try {
+          return [{ path: file, mtimeMs: statSync(file).mtimeMs }];
+        } catch {
+          return [];
+        }
+      });
+    },
+    now: () => new Date(),
+    // Starts `rigup <args>` detached from this process: it keeps running after rigup exits.
+    spawnSelf(args) {
+      try {
+        const child = spawn(process.execPath, [path.join(this.appDir, 'rigup.mjs'), ...args], { detached: true, stdio: 'ignore' });
+        child.unref();
+      } catch {
+        // Best effort only.
       }
     },
     /** Names in a folder, or null when it cannot be read. */

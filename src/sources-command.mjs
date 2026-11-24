@@ -77,7 +77,7 @@ export function runSources(ctx, args, { log = console.log, error = console.error
     return 1;
   }
   if (args.includes('--json')) {
-    log(JSON.stringify(config.sources.map(s => ({ source: s.spec.id, type: s.spec.type, plugins: s.plugins })), null, 2));
+    log(JSON.stringify(config.sources.map(s => ({ source: s.spec.id, type: s.spec.type, plugins: s.plugins, exclude: s.exclude })), null, 2));
     return 0;
   }
   if (!config.sources.length) {
@@ -86,7 +86,9 @@ export function runSources(ctx, args, { log = console.log, error = console.error
   }
   log(`rigup sources · ${ctx.configFile}\n`);
   for (const s of config.sources) {
-    const plugins = s.plugins === '*' ? 'all plugins' : s.plugins.join(', ');
+    const plugins = s.plugins === '*'
+      ? `all plugins${s.exclude.length ? ` except ${s.exclude.join(', ')}` : ''}`
+      : s.plugins.join(', ');
     log(`  ${label(s.spec, ctx.home)}  (${s.spec.type}) · ${plugins}`);
   }
   return 0;
