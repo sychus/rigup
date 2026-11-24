@@ -7,6 +7,7 @@ import { localEntries, writeLocalMarketplace } from './local-marketplace.mjs';
 import { compareVersions, parseCliJson, parseJson, parseLsRemote, shortSha } from './parse.mjs';
 import { formatChanges } from './changes.mjs';
 import { computeChanges, openHistory } from './history.mjs';
+import { writeCheck } from './notifier.mjs';
 
 // The npm package name (scoped: npm rejected plain "rigup" as too close to "rig-up").
 // The command stays `rigup`. Everything below derives from this one constant.
@@ -92,6 +93,36 @@ export function ownVersion(ctx) {
   return (pkg && pkg.version) || null;
 }
 
+/** The real folder of the running rigup: the update-check record says which rigup it describes. */
+export function appPathOf(ctx) {
+  return ctx.realpath ? ctx.realpath(ctx.appDir) : ctx.appDir;
+}
+
+/**
+ * `rigup __check-update` (background): records the installed and latest version for the notice.
+ * A pnpm install is updated with rigup update; any other install from npm (npm -g, yarn…) gets
+ * the npm command instead; a checkout records nothing to compare.
+ */
+export function checkForUpdate(ctx) {
+  const base = { checkedAt: ctx.now().getTime(), appPath: appPathOf(ctx), installed: null, latest: null };
+  const install = findInstall(ctx);
+  if (install && isGitSpec(install.spec)) {
+    const { urls, ref } = gitSpecTarget(install.spec);
+    let latest = null;
+    for (const url of urls) {
+      const res = ctx.run('git', ['ls-remote', url, ref ? `refs/heads/${ref}` : 'HEAD'], { timeout: 20000, env: GIT_ENV });
+      latest = res.status === 0 ? parseLsRemote(res.stdout) : null;
+      if (latest) break;
+    }
+    return writeCheck(ctx, { ...base, kind: 'git', installed: install.commit, latest, how: 'rigup update' });
+  }
+  const fromRegistry = install || ctx.appDir.split(path.sep).includes('node_modules');
+  if (!fromRegistry) return writeCheck(ctx, base);
+  const view = ctx.run('npm', ['view', PACKAGE, 'version'], { timeout: 30000 });
+  const latest = view.status === 0 ? view.stdout.trim() || null : null;
+  return writeCheck(ctx, { ...base, kind: 'npm', installed: ownVersion(ctx), latest, how: install ? 'rigup update' : `npm install -g ${PACKAGE}@latest` });
+}
+
 /** Step 1: update rigup itself. Returns { status: ok|info|fail, text, detail?, changed }. */
 export function updateSelf(ctx) {
   const install = findInstall(ctx);
@@ -143,6 +174,8 @@ export function runUpdate(ctx, { color = false, log = console.log } = {}) {
   // 1. rigup itself (the new version runs from the next command on).
   const self = updateSelf(ctx);
   step(self.status, self.text, self.detail);
+  // The notice must not keep saying "rigup has updates" for the version just installed.
+  if (self.changed && ctx.now) writeCheck(ctx, { checkedAt: 0 });
   failed = failed || self.status === 'fail';
   changed = changed || self.changed;
 

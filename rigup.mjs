@@ -10,7 +10,9 @@ import { runAdd, runRemove, runSources } from './src/sources-command.mjs';
 import { runSetup } from './src/setup-command.mjs';
 import { runList, runSearch } from './src/catalog-command.mjs';
 import { runChanges } from './src/changes-command.mjs';
-import { findInstall, runUpdate } from './src/update.mjs';
+import { appPathOf, checkForUpdate, findInstall, runUpdate } from './src/update.mjs';
+import { completionScript, SHELLS, sourceNames } from './src/completion.mjs';
+import { notifierPlan, readCheck, writeCheck } from './src/notifier.mjs';
 import { runPrune } from './src/prune-command.mjs';
 
 const HELP = `rigup · set up Claude Code with your skills, agents and commands
@@ -34,6 +36,8 @@ Usage:
   rigup prune [--days 28] [--yes] [--json]
                         Plugins of your sources you did not use lately (read locally from your
                         Claude transcripts); --yes uninstalls them and leaves them out of the config
+  rigup completion zsh|bash|fish
+                        Print a Tab-completion script (commands, and sources for rigup remove)
   rigup --version       Print the version (and the commit, for a git install)
   rigup --help          Show this help
 
@@ -76,8 +80,47 @@ async function main(argv) {
     else console.log(formatReport(report, { color }));
     return exitCode(report);
   }
+  if (command === 'completion') {
+    const script = completionScript(rest[0]);
+    if (!script) {
+      console.error(`rigup completion: which shell? ${SHELLS.join(', ')} (e.g. source <(rigup completion zsh))`);
+      return 2;
+    }
+    console.log(script);
+    return 0;
+  }
+  // Plumbing, not in the help: Tab completion and the background update check.
+  if (command === '__complete') {
+    if (rest[0] === 'sources') console.log(sourceNames(realContext()).join('\n'));
+    return 0;
+  }
+  if (command === '__check-update') {
+    checkForUpdate(realContext());
+    return 0;
+  }
   console.error(`rigup: unknown command "${command}"\n\n${HELP}`);
   return 2;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+/** After a command: the "rigup has updates" notice from the last check, and a new check once a day. */
+function notifyUpdates(argv) {
+  try {
+    const ctx = realContext();
+    const state = readCheck(ctx);
+    const now = Date.now();
+    const appPath = appPathOf(ctx);
+    const plan = notifierPlan({ state, now, argv, env: process.env, isTTY: Boolean(process.stderr.isTTY && process.stdout.isTTY), appPath });
+    if (plan.notice) console.error(`\n\x1b[33m${plan.notice}\x1b[0m`);
+    if (plan.check) {
+      // Stamp first, so a failing check (offline) runs once a day, not on every command.
+      writeCheck(ctx, { checkedAt: now, appPath, installed: null, latest: null });
+      ctx.spawnSelf(['__check-update']);
+    }
+  } catch {
+    // The notice is a convenience; it never changes a command's result.
+  }
+}
+
+const argv = process.argv.slice(2);
+process.exitCode = await main(argv);
+notifyUpdates(argv);
