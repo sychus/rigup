@@ -1,6 +1,8 @@
 // rigup list / rigup search: every skill, agent and command across your sources.
 // Pure functions only (ranking and formatting); reading the folders is in catalog-command.mjs.
 
+import { formatTokens } from './frontmatter.mjs';
+
 const KIND_ORDER = { skill: 0, agent: 1, command: 2 };
 
 export function sortEntries(entries) {
@@ -56,7 +58,7 @@ const kindTag = e => (e.kind === 'skill' ? '' : ` (${e.kind})`);
  * rigup list: grouped by source, then plugin. `notes` are lines about plugins or sources whose
  * contents could not be read (external plugin sources, unregistered repos).
  */
-export function formatList(entries, { installed = null, notes = [], color = false } = {}) {
+export function formatList(entries, { installed = null, notes = [], mcp = new Set(), color = false } = {}) {
   const paint = paintWith(color);
   const c = { plugins: new Set(entries.map(e => `${e.source}|${e.plugin}`)).size, skill: 0, agent: 0, command: 0 };
   for (const e of entries) c[e.kind]++;
@@ -64,6 +66,13 @@ export function formatList(entries, { installed = null, notes = [], color = fals
   if (!entries.length && !notes.length) {
     lines.push('', 'Nothing yet. Add a source with rigup add, then rigup setup.');
     return lines.join('\n');
+  }
+  const pluginTokens = id => entries.filter(e => e.pluginId === id).reduce((sum, e) => sum + (e.tokens || 0), 0);
+  if (installed) {
+    const on = [...new Set(entries.map(e => e.pluginId))].filter(id => installed.has(id));
+    const load = on.reduce((sum, id) => sum + pluginTokens(id), 0);
+    const withMcp = on.filter(id => mcp.has(id)).length;
+    lines.push(paint(2, `Installed plugins add ${formatTokens(load)} tokens to every prompt (names and descriptions; estimate${withMcp ? `; plus the MCP servers of ${withMcp}, not counted` : ''}).`));
   }
   const width = Math.min(36, Math.max(10, ...entries.map(e => e.name.length + kindTag(e).length)));
   let source = null;
@@ -77,12 +86,15 @@ export function formatList(entries, { installed = null, notes = [], color = fals
     if (e.plugin !== plugin) {
       plugin = e.plugin;
       const tag = installed && !installed.has(e.pluginId) ? paint(33, '  (not installed: rigup setup)') : '';
-      lines.push(`  ${paint(1, plugin)}${tag}`);
+      const tokens = pluginTokens(e.pluginId);
+      const cost = [tokens && `${formatTokens(tokens)} tokens per prompt`, mcp.has(e.pluginId) && '+ MCP servers, not counted'].filter(Boolean).join(' ');
+      lines.push(`  ${paint(1, plugin)}${cost ? paint(2, ` · ${cost}`) : ''}${tag}`);
     }
     lines.push(`    ${`${e.name}${kindTag(e)}`.padEnd(width)} ${paint(2, e.short ? `— ${e.short}` : '')}`.trimEnd());
   }
   if (notes.length) lines.push('', ...notes.map(n => paint(2, `ℹ ${n}`)));
   lines.push('', paint(2, 'Use a skill or command as /<plugin>:<name>. Search with rigup search <words>.'));
+  if (installed) lines.push(paint(2, 'Plugins you do not use: rigup prune.'));
   return lines.join('\n');
 }
 

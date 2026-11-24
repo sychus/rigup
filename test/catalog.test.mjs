@@ -5,8 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatList, formatSearch, searchCatalog, usage } from '../src/catalog.mjs';
-import { loadCatalog, pluginFolder, runList, runSearch, scanPlugin } from '../src/catalog-command.mjs';
-import { frontmatterDescription, shortDescription } from '../src/frontmatter.mjs';
+import { hasMcp, loadCatalog, pluginFolder, runList, runSearch, scanPlugin } from '../src/catalog-command.mjs';
+import { contextTokens, formatTokens, frontmatterDescription, shortDescription } from '../src/frontmatter.mjs';
 import { ACME_CATALOG, ACME_LOCATION, fakeContext, HOME, MY_SKILLS, ok } from './helpers.mjs';
 
 const FILES = {
@@ -97,7 +97,9 @@ test('formatList groups by source and plugin and marks what is not installed', (
   const { entries } = loadCatalog(ctx());
   const text = formatList(entries, { installed: new Set(['review@acme-skills', 'my-skills@rigup-local']) });
   assert.match(text, /^rigup list · 4 plugins · 3 skills · 1 agents · 1 commands/);
-  assert.match(text, /acme\/claude-skills\n {2}docs {2}\(not installed: rigup setup\)/);
+  assert.match(text, /acme\/claude-skills\n {2}docs · ~10 tokens per prompt {2}\(not installed: rigup setup\)/);
+  // The per-prompt total counts installed plugins only (review and my-skills here).
+  assert.match(text, /Installed plugins add ~\d+ tokens to every prompt/);
   assert.doesNotMatch(text, /review {2}\(not installed/);
   assert.match(text, /reviewer \(agent\)/);
   assert.match(formatList([]), /Nothing yet/);
@@ -122,4 +124,23 @@ test('rigup list --json and rigup search: installed flags, exit codes', () => {
   assert.match(out.pop(), /docs · write-docs {2}· not installed: rigup setup\n {4}Writes docs\n {4}use: \/docs:write-docs/);
   assert.equal(runSearch(ctx(), [], io), 2);
   assert.ok(MY_SKILLS && ok);
+});
+
+test('contextTokens: name and description, chars / 4; hidden from the model = 0', () => {
+  // "review:pr-review: Reviews a pull request." is 41 chars -> 11 tokens.
+  assert.equal(contextTokens('review', 'pr-review', '---\ndescription: Reviews a pull request.\n---\n', 'Reviews a pull request.'), 11);
+  assert.equal(contextTokens('review', 'pr-review', '---\ndescription: x\ndisable-model-invocation: true\n---\n', 'x'), 0);
+  assert.equal(formatTokens(996), '~1k');
+  assert.equal(formatTokens(1234), '~1.2k');
+  assert.equal(formatTokens(842), '~840');
+});
+
+test('a plugin with MCP servers is flagged: its tool definitions are not counted', () => {
+  const c = ctx({ files: { [`${ACME_LOCATION}/plugins/review/.mcp.json`]: '{"mcpServers":{}}' } });
+  assert.equal(hasMcp(c, `${ACME_LOCATION}/plugins/review`), true);
+  assert.equal(hasMcp(c, `${ACME_LOCATION}/plugins/docs`), false);
+  const { entries, mcp } = loadCatalog(c);
+  const text = formatList(entries, { installed: new Set(['review@acme-skills']), mcp });
+  assert.match(text, /review · ~\d+ tokens per prompt \+ MCP servers, not counted/);
+  assert.match(text, /plus the MCP servers of 1, not counted/);
 });

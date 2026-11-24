@@ -29,6 +29,25 @@ export function shortDescription(text, max = 110) {
   return one.replace(/\.$/, '');
 }
 
+/**
+ * Rough tokens a component adds to every prompt while its plugin is on: Claude Code lists each
+ * skill, command and agent by name and description so the model can pick one. A component with
+ * `disable-model-invocation: true` is left out of that list. Estimate: characters / 4.
+ */
+export function contextTokens(plugin, name, text, description) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text || '');
+  if (fm && /^disable-model-invocation:\s*true\s*$/m.test(fm[1])) return 0;
+  return Math.ceil(`${plugin}:${name}: ${description || ''}`.length / 4);
+}
+
+/** "~840", "~1.2k", "~12k": a token estimate, never shown as exact. */
+export function formatTokens(n) {
+  if (!n) return '0';
+  const tens = Math.max(10, Math.round(n / 10) * 10);
+  if (tens < 1000) return `~${tens}`;
+  return n < 10000 ? `~${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `~${Math.round(n / 1000)}k`;
+}
+
 /** The body after the frontmatter. */
 export function body(text) {
   return String(text || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');

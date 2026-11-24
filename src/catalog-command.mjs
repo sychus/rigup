@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { COMPONENT_DIRS, PLUGIN_MANIFEST_PATH } from './constants.mjs';
 import { gatherFacts } from './facts.mjs';
-import { body, frontmatterDescription, shortDescription } from './frontmatter.mjs';
+import { body, contextTokens, frontmatterDescription, shortDescription } from './frontmatter.mjs';
 import { parseJson } from './parse.mjs';
 import { formatList, formatSearch, searchCatalog, sortEntries } from './catalog.mjs';
 
@@ -51,7 +51,20 @@ export function scanPlugin(ctx, pluginDir, { flat = false } = {}) {
 function entry(ctx, { source, plugin, pluginId, kind, name, file }) {
   const text = ctx.readFile(file) || '';
   const description = frontmatterDescription(text) || '';
-  return { source, plugin, pluginId, kind, name, description, short: shortDescription(description), body: body(text).slice(0, BODY_LIMIT) };
+  return {
+    source, plugin, pluginId, kind, name, description, short: shortDescription(description),
+    tokens: contextTokens(plugin, name, text, description), body: body(text).slice(0, BODY_LIMIT),
+  };
+}
+
+/**
+ * True when a plugin ships MCP servers (.mcp.json or mcpServers in plugin.json). Their tool
+ * definitions also cost tokens on every prompt, and rigup cannot estimate them from files.
+ */
+export function hasMcp(ctx, pluginDir) {
+  if (ctx.stat(path.join(pluginDir, '.mcp.json'))) return true;
+  const manifest = parseJson(ctx.readFile(path.join(pluginDir, PLUGIN_MANIFEST_PATH))) || {};
+  return Boolean(manifest.mcpServers);
 }
 
 /** Folder of a catalog plugin inside its marketplace, or null when it lives elsewhere. */
@@ -66,9 +79,11 @@ export function pluginFolder(root, catalog, plugin) {
 export function loadCatalog(ctx, facts = gatherFacts(ctx, { checkAccess: false })) {
   const entries = [];
   const notes = [];
+  const mcp = new Set();
   for (const s of facts.sources) {
     const add = (plugin, pluginDir, opts) => {
       const pluginId = `${plugin}@${s.marketplaceName}`;
+      if (hasMcp(ctx, pluginDir)) mcp.add(pluginId);
       for (const c of scanPlugin(ctx, pluginDir, opts)) entries.push(entry(ctx, { source: s.label, plugin, pluginId, ...c }));
     };
     if (s.kind === 'plugin' || s.kind === 'flat') {
@@ -97,7 +112,7 @@ export function loadCatalog(ctx, facts = gatherFacts(ctx, { checkAccess: false }
     }
     if (external.length) notes.push(`${s.label}: ${external.join(', ')} live outside the marketplace repo; their contents show once installed (rigup setup)`);
   }
-  return { entries: sortEntries(entries), notes, facts };
+  return { entries: sortEntries(entries), notes, facts, mcp };
 }
 
 /** Plugin ids installed and enabled here, or null when claude cannot say. */
@@ -110,10 +125,10 @@ const forJson = (entries, installed) => entries.map(({ body: _b, ...e }) => ({ .
 
 export function runList(ctx, args, { color = false, log = console.log, error = console.error } = {}) {
   try {
-    const { entries, notes, facts } = loadCatalog(ctx);
+    const { entries, notes, facts, mcp } = loadCatalog(ctx);
     const installed = installedIds(facts);
-    if (args.includes('--json')) log(JSON.stringify({ entries: forJson(entries, installed), notes }, null, 2));
-    else log(formatList(entries, { installed, notes, color }));
+    if (args.includes('--json')) log(JSON.stringify({ entries: forJson(entries, installed), notes, mcpPlugins: [...mcp].sort() }, null, 2));
+    else log(formatList(entries, { installed, notes, mcp, color }));
     return 0;
   } catch (err) {
     error(`rigup list: ${err.message}`);
